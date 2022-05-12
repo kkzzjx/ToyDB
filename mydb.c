@@ -25,6 +25,18 @@ typedef enum{
     PREPARE_UNRECOGNIZED_STATEMENT
 }PrepareResult;
 
+typedef enum {
+    STATEMENT_INSERT,
+    STATEMENT_SELECT,
+    STATEMENT_UPDATE,
+    STATEMENT_DELETE
+}StatementType;
+
+typedef struct {
+    StatementType type;
+    // data
+}Statement;
+
 InputBuffer* newInputBuffer(){
     InputBuffer* inputBuffer=(InputBuffer*)malloc(sizeof(InputBuffer));
     inputBuffer->buffer=NULL;
@@ -56,6 +68,50 @@ void close_input_buffer(InputBuffer* buffer){
     free(buffer);//InputBuffer本身释放
 }
 
+MetaCommandResult do_meta_command(InputBuffer* inputBuffer){
+    if(strcmp(inputBuffer->buffer,".exit")==0){
+        exit(EXIT_SUCCESS);
+    }
+    else{
+        return META_COMMAND_UNRECOGNIZED_COMMAND;
+    }
+}
+
+// prepare statement,and output statement
+PrepareResult prepare_statement(InputBuffer* inputBuffer,Statement* statement){
+    if(strncmp(inputBuffer->buffer,"insert",6)==0){
+        statement->type=STATEMENT_INSERT;
+        return PREPARE_SUCCESS;
+    }
+    if(strncmp(inputBuffer->buffer,"select",6)==0){
+        statement->type=STATEMENT_INSERT;
+        return PREPARE_SUCCESS;
+    }
+
+
+    return PREPARE_UNRECOGNIZED_STATEMENT;
+}
+
+void execute_statement(Statement* statement){
+    switch (statement->type) {
+        case(STATEMENT_INSERT):
+            printf("do insert\n");
+            break;
+        case (STATEMENT_SELECT):
+            printf("do select\n");
+            break;
+        case(STATEMENT_DELETE):
+            printf("do delete\n");
+            break;
+        case(STATEMENT_UPDATE):
+            printf("do update\n");
+            break;
+    }
+}
+
+
+
+
 
 
 int main(){
@@ -64,13 +120,38 @@ int main(){
         print_prompt();
         read_line(inputBuffer);
 
-        if(strcmp(inputBuffer->buffer,".exit")==0){
-            close_input_buffer(inputBuffer);
-            exit(EXIT_SUCCESS);//exit(0) 正常退出
+//        if(strcmp(inputBuffer->buffer,".exit")==0){
+//            close_input_buffer(inputBuffer);
+//            exit(EXIT_SUCCESS);//exit(0) 正常退出
+//        }
+//        else{
+//            printf("command not found:%s\n",inputBuffer->buffer);
+//        }
+        if(inputBuffer->buffer[0]=='.'){
+            MetaCommandResult result=do_meta_command(inputBuffer);
+            switch (result) {
+                case (META_COMMAND_SUCCESS):
+                    continue;
+                case (META_COMMAND_UNRECOGNIZED_COMMAND):
+                    printf("Unrecognized command '%s'\n",inputBuffer->buffer);
+                    continue;
+
+            }
         }
-        else{
-            printf("command not found:%s\n",inputBuffer->buffer);
+        Statement statement;
+
+        PrepareResult prepareResult=prepare_statement(inputBuffer,&statement);
+        switch (prepareResult) {
+            case PREPARE_SUCCESS:
+                break;
+            case PREPARE_UNRECOGNIZED_STATEMENT:
+                printf("Unrecognized keyword at start of '%s'\n",inputBuffer->buffer);
+                continue;
         }
+
+        execute_statement(&statement);
+        printf("Executed\n");
+
     }
 
 
