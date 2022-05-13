@@ -64,8 +64,6 @@ const uint32_t EMAIL_OFFSET=USERNAME_OFFSET+USERNAME_SIZE;
 const uint32_t ROW_SIZE=ID_SIZE+USERNAME_SIZE+EMAIL_SIZE;
 
 
-
-
 void serialize_row(Row* source,void* dest){
     memcpy(dest+ID_OFFSET,&(source->id),ID_SIZE);
     memcpy(dest+USERNAME_OFFSET,&(source->username),USERNAME_SIZE);
@@ -136,11 +134,12 @@ const uint32_t TABLE_MAX_ROWS=ROW_NUM_PER_PAGE*TABLE_MAX_PAGES;
 void* read_slot(Table* table,uint32_t row_num){
 
     int page_id=row_num/ROW_NUM_PER_PAGE;
-   void* page=table->page[page_id];
+    void* page=table->page[page_id];
 
    if(page==NULL){
        //insert
        page=malloc(PAGE_SIZE);
+       table->page[page_id]=page;
    }
    uint32_t row_offset=row_num%ROW_NUM_PER_PAGE;
    uint32_t offset=row_offset*ROW_SIZE;
