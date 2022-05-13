@@ -181,16 +181,16 @@ ExecuteResult execute_insert(Statement* statement,Table* table){
 }
 
 void print_row(Row* row){
-    printf("%d %s %s\n",row->id,row->username,row->email);
+    printf("(%d %s %s)\n",row->id,row->username,row->email);
 }
 
 ExecuteResult execute_select_all(Statement* statement,Table* table){
     uint32_t all_num=table->row_num;
     if(all_num<0) return EXECUTE_ERROR;
-    Row* row;
+    Row row;
     for(uint32_t i=0;i<all_num;i++){
-        deserialize_row(read_slot(table,i),row);
-        print_row(row);
+        deserialize_row(read_slot(table,i),&row);
+        print_row(&row);
     }
 
     return EXECUTE_SUCCESS;
@@ -204,7 +204,7 @@ ExecuteResult execute_statement(Statement* statement,Table* table){
             printf("insert successfully!\n");
             return execute_insert(statement,table);
         case (STATEMENT_SELECT):
-            printf("select successfully\n!");
+            printf("select successfully!\n");
             return execute_select_all(statement,table);
         case(STATEMENT_DELETE):
             printf("do delete\n");
@@ -288,6 +288,7 @@ int main(){
        // printf("Executed\n");
 
     }
+    freeTable(table);
 
 
 
