@@ -27,7 +27,8 @@ typedef enum{
     PREPARE_UNRECOGNIZED_STATEMENT,
     PREPARE_SYNTAX_ERROR,
     PREPARE_STRING_TOO_LONG,
-    PREPARE_NEGATIVE_ID
+    PREPARE_NEGATIVE_ID,
+    PREPARE_ERROR_FORMAT
 }PrepareResult;
 
 typedef enum {
@@ -50,6 +51,8 @@ typedef struct{
     //C strings are supposed to end with a null character,so we should allocate one additional byte
 
 }Row;
+
+
 #define MAX_PAGE_NUM 100
 typedef struct{
     int file_descriptor;
@@ -63,6 +66,13 @@ typedef struct{
    // void* page[MAX_PAGE_NUM];
    Pager* pager;
 }Table;
+
+typedef struct{
+    Table* table;
+    uint32_t row_num;
+    bool end_of_table;
+}Cursor;
+
 // id sizes are not sure
 #define size_of_attribute(Struct,Attribute) sizeof(((Struct*)0)->Attribute)
 const uint32_t ID_SIZE=size_of_attribute(Row ,id);
@@ -185,6 +195,8 @@ PrepareResult prepare_insert(InputBuffer* inputBuffer,Statement* statement){
     char* key_id= strtok(NULL," ");
     char* username= strtok(NULL," ");
     char* email= strtok(NULL," ");
+    char* addition= strtok(NULL," ");
+    if(addition!=NULL) return PREPARE_ERROR_FORMAT;
     if(key_id==NULL||username==NULL||email==NULL){
         return PREPARE_SYNTAX_ERROR;
     }
@@ -455,6 +467,9 @@ int main(int argc,char* argv[]){
                 continue;
             case PREPARE_NEGATIVE_ID:
                 printf("Negative id!\n");
+                continue;
+            case PREPARE_ERROR_FORMAT:
+                printf("Error format!\n");
                 continue;
         }
 
