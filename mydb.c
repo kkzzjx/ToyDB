@@ -25,7 +25,9 @@ typedef enum{
 typedef enum{
     PREPARE_SUCCESS,
     PREPARE_UNRECOGNIZED_STATEMENT,
-    PREPARE_SYNTAX_ERROR
+    PREPARE_SYNTAX_ERROR,
+    PREPARE_STRING_TOO_LONG,
+    PREPARE_NEGATIVE_ID
 }PrepareResult;
 
 typedef enum {
@@ -43,8 +45,9 @@ typedef enum{
 
 typedef struct{
     uint32_t id;
-    char username[COLUMN_USERNAME_SIZE];
-    char email[COLUMN_EMAIL_SIZE];
+    char username[COLUMN_USERNAME_SIZE+1];
+    char email[COLUMN_EMAIL_SIZE+1];
+    //C strings are supposed to end with a null character,so we should allocate one additional byte
 
 }Row;
 #define MAX_PAGE_NUM 100
@@ -146,21 +149,53 @@ void* read_slot(Table* table,uint32_t row_num){
    return offset+page;
 }
 
+PrepareResult prepare_insert(InputBuffer* inputBuffer,Statement* statement){
+
+    statement->type=STATEMENT_INSERT;
+    char* keyword= strtok(inputBuffer->buffer," ");
+    char* key_id= strtok(NULL," ");
+    char* username= strtok(NULL," ");
+    char* email= strtok(NULL," ");
+    if(key_id==NULL||username==NULL||email==NULL){
+        return PREPARE_SYNTAX_ERROR;
+    }
+    int id=atoi(key_id);
+    if(id<0) return PREPARE_NEGATIVE_ID;
+    if(strlen(username)>COLUMN_USERNAME_SIZE){
+        return  PREPARE_STRING_TOO_LONG;
+    }
+    if(strlen(email)>COLUMN_EMAIL_SIZE){
+        return PREPARE_STRING_TOO_LONG;
+    }
+
+    statement->row.id=id;
+    strcpy(statement->row.username,username);
+    strcpy(statement->row.email,email);
+    return PREPARE_SUCCESS;
+
+}
+
 
 
 // mini compiler
 // prepare statement,and output statement
 PrepareResult prepare_statement(InputBuffer* inputBuffer,Statement* statement){
     if(strncmp(inputBuffer->buffer,"insert",6)==0){
-        statement->type=STATEMENT_INSERT;
-        //input %d need sing & !!!(so easy to ignore)
-        int args_num= sscanf(inputBuffer->buffer,"insert %d %s %s",&(statement->row.id),statement->row.email,statement->row.username);
-        if(args_num<3){
-            return  PREPARE_SYNTAX_ERROR;
-        }
-        return PREPARE_SUCCESS;
+        return prepare_insert(inputBuffer,statement);
+
+
+        //add some judgement
+//        statement->type=STATEMENT_INSERT;
+//        //input %d need sing & !!!(so easy to ignore)
+//        int args_num= sscanf(inputBuffer->buffer,"insert %d %s %s",&(statement->row.id),statement->row.email,statement->row.username);
+//        if(args_num<3){
+//            return  PREPARE_SYNTAX_ERROR;
+//        }
+//        return PREPARE_SUCCESS;
     }
     if(strcmp(inputBuffer->buffer,"select")==0){
+
+
         statement->type=STATEMENT_SELECT;
         return PREPARE_SUCCESS;
     }
@@ -267,8 +302,16 @@ int main(){
                 break;
             case PREPARE_SYNTAX_ERROR:
                 printf("Syntax error. Could not parse statement\n");
+                continue;
             case PREPARE_UNRECOGNIZED_STATEMENT:
                 printf("Unrecognized keyword at start of '%s'\n",inputBuffer->buffer);
+                continue;
+
+            case PREPARE_STRING_TOO_LONG:
+                printf("Your string too loooong!\n");
+                continue;
+            case PREPARE_NEGATIVE_ID:
+                printf("Negative id!\n");
                 continue;
         }
 
