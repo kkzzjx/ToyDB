@@ -73,6 +73,24 @@ typedef struct{
     bool end_of_table;
 }Cursor;
 
+Cursor* table_start(Table* table){
+    Cursor *cursor= malloc(sizeof(Cursor));
+    cursor->table=table;
+    cursor->row_num=0;
+    cursor->end_of_table=(cursor->row_num==table->row_num);
+
+    return cursor;
+}
+
+Cursor* table_end(Table* table){
+    Cursor* cursor= malloc(sizeof (Cursor));
+    cursor->table=table;
+    cursor->row_num=table->row_num;
+    cursor->end_of_table=true;
+
+    return cursor;
+}
+
 // id sizes are not sure
 #define size_of_attribute(Struct,Attribute) sizeof(((Struct*)0)->Attribute)
 const uint32_t ID_SIZE=size_of_attribute(Row ,id);
@@ -170,8 +188,16 @@ void* get_page(Pager *pager,uint32_t page_num){
 
 }
 
+void cursor_advance(Cursor* cursor){
+    cursor->row_num++;
+    if(cursor->row_num>=cursor->table->row_num){
+        cursor->end_of_table=true;
+    }
+
+}
+
 // you can get row's position from a page(get offset of row in this page)
-void* read_slot(Table* table,uint32_t row_num){
+void* cursor_value(Cursor* cursor){
 
 //    int page_id=row_num/ROW_NUM_PER_PAGE;
 //    void* page=table->page[page_id];
@@ -181,8 +207,11 @@ void* read_slot(Table* table,uint32_t row_num){
 //       page=malloc(PAGE_SIZE);
 //       table->page[page_id]=page;
 //   }
+    uint32_t row_num=cursor->row_num;
+
+
     uint32_t page_num=row_num/ROW_NUM_PER_PAGE;
-    void* page=get_page(table->pager,page_num);
+    void* page=get_page(cursor->table->pager,page_num);
    uint32_t row_offset=row_num%ROW_NUM_PER_PAGE;
    uint32_t offset=row_offset*ROW_SIZE;
    return offset+page;
@@ -246,11 +275,12 @@ PrepareResult prepare_statement(InputBuffer* inputBuffer,Statement* statement){
 }
 
 ExecuteResult execute_insert(Statement* statement,Table* table){
+    Cursor *cursor= table_end(table);
     if(table->row_num>=TABLE_MAX_ROWS){
         return EXECUTE_TABLE_FULL;
     }
     Row *row=&(statement->row);
-    serialize_row(row, read_slot(table,table->row_num));
+    serialize_row(row, cursor_value(cursor));
     table->row_num++;
     return EXECUTE_SUCCESS;
 }
@@ -260,13 +290,22 @@ void print_row(Row* row){
 }
 
 ExecuteResult execute_select_all(Statement* statement,Table* table){
+    Cursor *cursor= table_start(table);
     uint32_t all_num=table->row_num;
     if(all_num<0) return EXECUTE_ERROR;
     Row row;
-    for(uint32_t i=0;i<all_num;i++){
-        deserialize_row(read_slot(table,i),&row);
+//    for(uint32_t i=0;i<all_num;i++){
+//        deserialize_row(read_slot(table,i),&row);
+//        print_row(&row);
+//    }
+
+    while(cursor->end_of_table!=true){
+        deserialize_row(cursor_value(cursor),&row);
         print_row(&row);
+        cursor_advance(cursor);
     }
+    free(cursor);
+
 
     return EXECUTE_SUCCESS;
 
