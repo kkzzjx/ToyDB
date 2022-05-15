@@ -44,6 +44,9 @@ typedef enum{
     EXECUTE_TABLE_FULL
 }ExecuteResult;
 
+
+
+
 typedef struct{
     uint32_t id;
     char username[COLUMN_USERNAME_SIZE+1];
@@ -102,6 +105,12 @@ const uint32_t EMAIL_OFFSET=USERNAME_OFFSET+USERNAME_SIZE;
 const uint32_t ROW_SIZE=ID_SIZE+USERNAME_SIZE+EMAIL_SIZE;
 
 
+const uint32_t PAGE_SIZE=4096;
+
+#define TABLE_MAX_PAGES 100
+const uint32_t ROW_NUM_PER_PAGE=PAGE_SIZE/ROW_SIZE;
+const uint32_t TABLE_MAX_ROWS=ROW_NUM_PER_PAGE*TABLE_MAX_PAGES;
+
 void serialize_row(Row* source,void* dest){
     memcpy(dest+ID_OFFSET,&(source->id),ID_SIZE);
     memcpy(dest+USERNAME_OFFSET,&(source->username),USERNAME_SIZE);
@@ -114,6 +123,47 @@ void deserialize_row(void* source,Row* dest){
     memcpy(&(dest->username),source+USERNAME_OFFSET,USERNAME_SIZE);
     memcpy(&(dest->email),source+EMAIL_OFFSET,EMAIL_SIZE);
 }
+
+typedef enum{
+    NODE_INTERNAL,
+    NODE_LEAF
+}NodeType;
+
+/**
+ * Common Node Header Layout
+ */
+
+const uint32_t NODE_TYPE_SIZE=sizeof(uint8_t); //1 byte
+const uint32_t NODE_TYPE_OFFSET=0;
+const uint32_t IS_ROOT_SIZE=sizeof(uint8_t); //1 byte
+const uint32_t IS_ROOT_OFFSET=NODE_TYPE_OFFSET+NODE_TYPE_SIZE;
+const uint32_t PARENT_NODE_SIZE=sizeof(uint32_t);//4 bytes
+const uint32_t PARENT_NODE_OFFSET=IS_ROOT_OFFSET+IS_ROOT_SIZE;
+const uint32_t COMMON_NODE_HEADER_SIZE=NODE_TYPE_SIZE+IS_ROOT_SIZE+PARENT_NODE_SIZE;
+
+/**
+ * Leaf Node Header Layout
+ *
+ */
+
+const uint32_t LEAF_NODE_NUM_CELLS_SIZE=sizeof (uint32_t); //4 bytes
+const uint32_t LEAF_NODE_NUM_CELLS_OFFSET=NODE_TYPE_OFFSET+COMMON_NODE_HEADER_SIZE;
+const uint32_t LEAF_NODE_HEADER_SIZE=COMMON_NODE_HEADER_SIZE+LEAF_NODE_NUM_CELLS_SIZE;
+
+/**
+ * Leaf Node Body Header
+ *
+ */
+
+const uint32_t LEAF_NODE_KEY_SIZE=sizeof(uint32_t);  //k  4bytes
+const uint32_t LEAF_NODE_KEY_OFFSET=0;
+const uint32_t LEAF_NODE_VALUE_SIZE=ROW_SIZE;
+const uint32_t LEAF_NODE_VALUE_OFFSET=LEAF_NODE_KEY_SIZE+LEAF_NODE_KEY_OFFSET;
+const uint32_t LEAF_NODE_CELL_SIZE=LEAF_NODE_KEY_SIZE+LEAF_NODE_VALUE_SIZE;
+const uint32_t LEAF_NODE_FOR_CELL_SIZE=PAGE_SIZE-LEAF_NODE_HEADER_SIZE; // max space for cells
+const uint32_t LEAF_NODE_MAX_NUM=LEAF_NODE_FOR_CELL_SIZE/LEAF_NODE_CELL_SIZE;// how many cells can be placed in one page
+
+
 
 typedef struct {
     StatementType type;
@@ -153,12 +203,6 @@ void close_input_buffer(InputBuffer* buffer){
 }
 
 
-
-const uint32_t PAGE_SIZE=4096;
-
-#define TABLE_MAX_PAGES 100
-const uint32_t ROW_NUM_PER_PAGE=PAGE_SIZE/ROW_SIZE;
-const uint32_t TABLE_MAX_ROWS=ROW_NUM_PER_PAGE*TABLE_MAX_PAGES;
 
 void* get_page(Pager *pager,uint32_t page_num){
     if(page_num>MAX_PAGE_NUM){
