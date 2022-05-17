@@ -163,6 +163,29 @@ const uint32_t LEAF_NODE_CELL_SIZE=LEAF_NODE_KEY_SIZE+LEAF_NODE_VALUE_SIZE;
 const uint32_t LEAF_NODE_FOR_CELL_SIZE=PAGE_SIZE-LEAF_NODE_HEADER_SIZE; // max space for cells
 const uint32_t LEAF_NODE_MAX_NUM=LEAF_NODE_FOR_CELL_SIZE/LEAF_NODE_CELL_SIZE;// how many cells can be placed in one page
 
+/**
+ * Accessing Leaf Node Fields
+ */
+
+uint32_t* leaf_node_num_cells(void* node){
+    return node+LEAF_NODE_NUM_CELLS_OFFSET;
+}
+
+void* leaf_node_cell(void* node,uint32_t cell_num){
+    return node+LEAF_NODE_HEADER_SIZE+cell_num*LEAF_NODE_CELL_SIZE;
+}
+
+uint32_t* leaf_node_key(void* node,uint32_t cell_num){
+    return leaf_node_cell(node,cell_num);
+}
+
+void* leaf_node_value(void* node,uint32_t cell_num){
+    return leaf_node_cell(node,cell_num)+LEAF_NODE_KEY_SIZE;
+}
+
+void initialize_leaf_node(void* node){
+    *leaf_node_num_cells(node)=0;
+}
 
 
 typedef struct {
@@ -421,7 +444,7 @@ Table *db_open(const char* filename){
 
 
 
-void pager_flush(Pager* pager,uint32_t page_num,uint32_t size){
+void pager_flush(Pager* pager,uint32_t page_num){
     //printf("test\n");
     if(pager->pages[page_num]==NULL){
         printf("Tried to flush null page!\n");
@@ -434,7 +457,7 @@ void pager_flush(Pager* pager,uint32_t page_num,uint32_t size){
         exit(EXIT_FAILURE);
     }
 
-    int write_bytes= write(pager->file_descriptor,pager->pages[page_num],size);
+    int write_bytes= write(pager->file_descriptor,pager->pages[page_num],PAGE_SIZE);
    // printf("test\n");
    // printf("%d\n",write_bytes);
     if(write_bytes==-1){
@@ -448,26 +471,29 @@ void pager_flush(Pager* pager,uint32_t page_num,uint32_t size){
 void db_close(Table* table){
     Pager * pager=table->pager;
     uint32_t row_num=table->row_num;
-    uint32_t full_page_num=row_num/ROW_NUM_PER_PAGE;
 
 
-    for(uint32_t i=0;i<full_page_num;i++){
-        if(pager->pages[i]==NULL){
-            continue;
-        }
-        pager_flush(pager,i,PAGE_SIZE);
-        free(pager->pages[i]);
-        pager->pages[i]=NULL;
-    }
-    uint32_t additional_rows=row_num%ROW_NUM_PER_PAGE;
 
-    if(additional_rows!=0){
-        if(pager->pages[full_page_num]!=NULL){
-            pager_flush(pager,full_page_num,additional_rows*ROW_SIZE);
-            free(pager->pages[full_page_num]);
-            pager->pages[full_page_num]=NULL;
-        }
-    }
+//    uint32_t full_page_num=row_num/ROW_NUM_PER_PAGE;
+//
+//
+//    for(uint32_t i=0;i<full_page_num;i++){
+//        if(pager->pages[i]==NULL){
+//            continue;
+//        }
+//        pager_flush(pager,i,PAGE_SIZE);
+//        free(pager->pages[i]);
+//        pager->pages[i]=NULL;
+//    }
+//    uint32_t additional_rows=row_num%ROW_NUM_PER_PAGE;
+//
+//    if(additional_rows!=0){
+//        if(pager->pages[full_page_num]!=NULL){
+//            pager_flush(pager,full_page_num,additional_rows*ROW_SIZE);
+//            free(pager->pages[full_page_num]);
+//            pager->pages[full_page_num]=NULL;
+//        }
+//    }
 
     int close_result= close(pager->file_descriptor);
     if(close_result==-1){
