@@ -41,7 +41,8 @@ typedef enum {
 typedef enum{
     EXECUTE_SUCCESS,
     EXECUTE_ERROR,
-    EXECUTE_TABLE_FULL
+    EXECUTE_TABLE_FULL,
+    EXECUTE_DUPLICATE_KEY
 }ExecuteResult;
 
 
@@ -125,7 +126,7 @@ const uint32_t IS_ROOT_SIZE=sizeof(uint8_t); //1 byte
 const uint32_t IS_ROOT_OFFSET=NODE_TYPE_OFFSET+NODE_TYPE_SIZE;
 const uint32_t PARENT_NODE_SIZE=sizeof(uint32_t);//4 bytes
 const uint32_t PARENT_NODE_OFFSET=IS_ROOT_OFFSET+IS_ROOT_SIZE;
-const uint32_t COMMON_NODE_HEADER_SIZE=NODE_TYPE_SIZE+IS_ROOT_SIZE+PARENT_NODE_SIZE;
+const uint8_t COMMON_NODE_HEADER_SIZE=NODE_TYPE_SIZE+IS_ROOT_SIZE+PARENT_NODE_SIZE;
 
 /**
  * Leaf Node Header Layout
@@ -168,9 +169,21 @@ uint32_t* leaf_node_key(void* node,uint32_t cell_num){
 void* leaf_node_value(void* node,uint32_t cell_num){
     return leaf_node_cell(node,cell_num)+LEAF_NODE_KEY_SIZE;
 }
+NodeType get_node_type(void *node){
+    uint8_t value=*((uint8_t*)(node+NODE_TYPE_OFFSET));
+    return (NodeType)value;
+}
+
+void set_node_type(void *node,NodeType type){
+  //  printf("set\n");
+    uint8_t value=type;
+    *((uint8_t*)(node+NODE_TYPE_OFFSET))=value;
+}
 
 void initialize_leaf_node(void* node){
+
     *leaf_node_num_cells(node)=0; //num_cells=0;
+    set_node_type(node,NODE_LEAF);
 }
 
 
@@ -369,16 +382,71 @@ void leaf_node_insert(Cursor* cursor,uint32_t key,Row* value){
 }
 
 
+
+Cursor* leaf_node_find(Table* table,uint32_t page_num,uint32_t key){
+    void* node= get_page(table->pager,page_num);
+    uint32_t num_cells= *leaf_node_num_cells(node);
+    Cursor* cursor= malloc(sizeof(Cursor));
+    cursor->table=table;
+    cursor->page_num=page_num;
+    //cursor->cell_num ??
+    //Binary Search
+    // find key from [0,num_cells)
+    uint32_t left=0,right=num_cells;
+    while(left<right){
+        uint32_t mid=(left+right)/2;
+        uint32_t mid_key= *leaf_node_key(node,mid);
+        if(mid_key==key){
+            cursor->cell_num=mid;
+            return cursor;
+        }
+        if(key<mid_key){
+            right=mid;
+        }
+        else{
+            left=mid+1;
+
+        }
+    }
+    cursor->cell_num=left;
+    return cursor;
+
+
+}
+
+Cursor* table_find(Table* table,uint32_t key){
+    void* root_node= get_page(table->pager,table->root_page_num);
+  //  printf("%d", get_node_type(root_node));
+    if(get_node_type(root_node)==NODE_LEAF){
+        return leaf_node_find(table,table->root_page_num,key);
+    }
+    else{
+        printf("Internal Node\n");
+        exit(EXIT_FAILURE);
+    }
+
+}
+
 ExecuteResult execute_insert(Statement* statement,Table* table){
 
     void* page= get_page(table->pager,table->root_page_num);
-    if(*(leaf_node_num_cells(page))>=LEAF_NODE_MAX_NUM){
+    uint32_t num_cells= *leaf_node_num_cells(page);
+    if(num_cells>=LEAF_NODE_MAX_NUM){
         return EXECUTE_TABLE_FULL;
     }
 
 
     Row *row=&(statement->row);
-    Cursor *cursor= table_end(table);
+    uint32_t key=row->id;
+    Cursor* cursor= table_find(table,key);
+
+    if(cursor->cell_num<num_cells){
+        uint32_t key_at_index=*leaf_node_key(page,cursor->cell_num);
+        if(key==key_at_index){
+            return EXECUTE_DUPLICATE_KEY;
+        }
+    }
+
     leaf_node_insert(cursor,row->id,row);
     return EXECUTE_SUCCESS;
 }
@@ -413,10 +481,10 @@ ExecuteResult execute_select_all(Statement* statement,Table* table){
 ExecuteResult execute_statement(Statement* statement,Table* table){
     switch (statement->type) {
         case(STATEMENT_INSERT):
-            printf("insert successfully!\n");
+           // printf("insert successfully!\n");
             return execute_insert(statement,table);
         case (STATEMENT_SELECT):
-            printf("select successfully!\n");
+           // printf("select successfully!\n");
             return execute_select_all(statement,table);
         case(STATEMENT_DELETE):
             printf("do delete\n");
@@ -454,7 +522,7 @@ Pager *pager_open(const char * filename){
     pager->file_descriptor=fd;
     pager->file_length=file_length;
     pager->num_pages=file_length/PAGE_SIZE;
-    if(file_length%PAGE_SIZE==0){
+    if(file_length%PAGE_SIZE!=0){
         printf("Db file is not a whole number of pages.Corrupt file.\n");
         exit(EXIT_FAILURE);
     }
@@ -668,8 +736,12 @@ int main(int argc,char* argv[]){
             case EXECUTE_TABLE_FULL:
                 printf("Error:Table full!\n");
                 break;
-//            case EXECUTE_SUCCESS:
-//                continue;
+            case EXECUTE_SUCCESS:
+                printf("Executed!\n");
+                break;
+            case EXECUTE_DUPLICATE_KEY:
+                printf("Error:Duplicate key.\n");
+                break;
         }
 
        // printf("Executed\n");
